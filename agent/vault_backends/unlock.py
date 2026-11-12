@@ -1,7 +1,8 @@
 """Per-process unlock state for external password managers.
 
 An unlock is a session token minted by the manager's CLI from the master
-password (``op signin --raw`` / ``bw unlock --raw``). The token lives in
+password (``op signin --raw`` / ``bw unlock --raw``), or an empty string for
+verified native-app authorization (None means locked). The lease lives in
 process memory only, keyed by (profile home, backend), and is dropped at an
 idle TTL (by a timer, not at the next call) or an explicit lock. It is held
 inside a closure, so no module attribute exposes it to a plain import or a
@@ -211,7 +212,7 @@ _tokens = _token_store()
 
 
 def get_session_token(backend: str) -> Optional[str]:
-    """Token for a real manager call; refreshes the idle timer."""
+    """Token (possibly empty for native auth), or None when locked; refreshes idle time."""
     return _tokens.live(_key(backend), True)
 
 
