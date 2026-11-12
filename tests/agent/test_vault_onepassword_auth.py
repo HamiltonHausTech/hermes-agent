@@ -188,4 +188,3 @@ def test_native_authorization_does_not_depend_on_manual_signin(fake_op):
         assert backend.is_unlocked()
         calls = [json.loads(line) for line in (fake_op / "calls.jsonl").read_text().splitlines()]
         assert [call["command"] for call in calls] == ["vault"]
-
