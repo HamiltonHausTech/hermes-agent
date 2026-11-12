@@ -70,12 +70,25 @@ Sites that ask for a code after the password are handled the same way:
 
 Nothing to enable. If the `op` or `bw` command-line tool is installed and signed
 in, Hermes picks it up automatically and its website logins become fillable
-alongside the local ones. The first time the agent needs one of those logins it
-asks you to unlock the manager with your master password (masked prompt; once
-per session, 30 minutes idle). Hermes hands the master password to the manager's
-CLI through its non-interactive channel (`op signin` on stdin, `bw unlock
---passwordenv` in the child's environment) and keeps only the session token in
-memory. The agent never sees the master password, the token, or any login.
+alongside the local ones. In local CLI, TUI, Desktop and ACP conversations, the
+agent uses native 1Password app approval by default. Enable **Settings → Developer →
+Integrate with 1Password CLI** in the 1Password app and approve the request there;
+a Hermes masked-password callback is not required for that native approval.
+Other managers retain their masked master-password prompt.
+
+1Password app integration can succeed without emitting a CLI session token.
+Hermes verifies access with a metadata-only vault listing and keeps a profile-scoped,
+revocable unlock lease in memory instead. Status checks never launch the CLI.
+Lock, owner-session teardown and the 30-minute idle expiry still revoke the lease.
+Unattended sessions cannot initiate native authorization or reuse native app leases.
+Configured account changes require a new authorization for that account. To request manual sign-in,
+use `browser_vault` with `action: unlock`, `backend: onepassword`, and `method: password`;
+that path still requires a masked-password prompt.
+
+Hermes hands manual master passwords to the manager's CLI through its non-interactive
+channel (`op signin` on stdin, `bw unlock --passwordenv` in the child's environment)
+and keeps session tokens only in memory. The agent never sees a master password,
+session token, or login password.
 A manager item that lists several websites (say `amazon.co.uk`,
 `www.amazon.co.uk` and `eu.account.amazon.com`) fills on each of those exact
 origins; nothing is inferred beyond the URLs saved on the item.
