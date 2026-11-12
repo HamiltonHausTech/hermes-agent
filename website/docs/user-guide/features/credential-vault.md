@@ -80,7 +80,8 @@ Other managers retain their masked master-password prompt.
 Hermes verifies access with a metadata-only vault listing and keeps a profile-scoped,
 revocable unlock lease in memory instead. Status checks never launch the CLI.
 Lock, owner-session teardown and the 30-minute idle expiry still revoke the lease.
-Unattended sessions cannot initiate native authorization. To request manual sign-in,
+Unattended sessions cannot initiate native authorization or reuse native app leases.
+Configured account changes require a new authorization for that account. To request manual sign-in,
 use `browser_vault` with `action: unlock`, `backend: onepassword`, and `method: password`;
 that path still requires a masked-password prompt.
 

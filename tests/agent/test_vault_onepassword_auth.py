@@ -172,9 +172,20 @@ def test_onepassword_unproven_or_revoked_app_authorization_stays_locked(fake_op,
                 backend.list_items()
         else:
             with pytest.raises(RuntimeError):
-                backend.unlock("")
+                backend.unlock("synthetic master" if failure == "signin_failure" else "")
         assert not backend.is_unlocked()
         with pytest.raises((UnlockRequired, RuntimeError), match="locked|login not found"):
             backend.resolve_password("op:demo")
     calls = [json.loads(line) for line in (fake_op / "calls.jsonl").read_text().splitlines()]
     assert all(call["args"][:1] != ["get"] for call in calls), "no login secrets may be read to prove authorization"
+
+
+def test_native_authorization_does_not_depend_on_manual_signin(fake_op):
+    (fake_op / "state.json").write_text(json.dumps({"mode": "desktop", "signin_failure": True}))
+    with _profile(fake_op / "profile-a"):
+        backend = _backend()
+        backend.unlock("")
+        assert backend.is_unlocked()
+        calls = [json.loads(line) for line in (fake_op / "calls.jsonl").read_text().splitlines()]
+        assert [call["command"] for call in calls] == ["vault"]
+

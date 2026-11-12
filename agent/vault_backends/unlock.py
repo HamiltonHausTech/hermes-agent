@@ -95,12 +95,13 @@ _Key = tuple[str, str]  # (profile home, backend)
 class _Token:
     value: str = field(repr=False)
     last_used: float
+    context: Optional[str] = None
 
 
 class _TokenOps(NamedTuple):
-    live: Callable[[_Key, bool], Optional[str]]
+    live: Callable[[_Key, bool, Optional[str]], Optional[str]]
     begin: Callable[[_Key], int]
-    commit: Callable[[_Key, str, Optional[int], Optional[str]], bool]
+    commit: Callable[[_Key, str, Optional[int], Optional[str], Optional[str]], bool]
     lock_profile: Callable[[str, Optional[str]], None]
     release: Callable[[str], None]
     lock_everything: Callable[[], None]
@@ -154,10 +155,10 @@ def _token_store() -> _TokenOps:
                 del tokens[key]
             arm(now)
 
-    def live(key: _Key, touch: bool) -> Optional[str]:
+    def live(key: _Key, touch: bool, context: Optional[str]) -> Optional[str]:
         with guard:
             token = tokens.get(key)
-            if token is None:
+            if token is None or (context is not None and token.context != context):
                 return None
             now = time.monotonic()
             if now - token.last_used > _IDLE_TTL_S:
@@ -172,12 +173,12 @@ def _token_store() -> _TokenOps:
         with guard:
             return generations.get(key, 0)
 
-    def commit(key: _Key, value: str, generation: Optional[int], owner: Optional[str]) -> bool:
+    def commit(key: _Key, value: str, generation: Optional[int], owner: Optional[str], context: Optional[str]) -> bool:
         with guard:
             if generation is not None and generation != generations.get(key, 0):
                 return False
             now = time.monotonic()
-            tokens[key] = _Token(value, now)
+            tokens[key] = _Token(value, now, context)
             owners[key] = owner
             arm(now)
             return True
@@ -211,9 +212,9 @@ def _token_store() -> _TokenOps:
 _tokens = _token_store()
 
 
-def get_session_token(backend: str) -> Optional[str]:
+def get_session_token(backend: str, *, context: Optional[str] = None, touch: bool = True) -> Optional[str]:
     """Token (possibly empty for native auth), or None when locked; refreshes idle time."""
-    return _tokens.live(_key(backend), True)
+    return _tokens.live(_key(backend), touch, context)
 
 
 def begin_unlock(backend: str) -> int:
@@ -221,9 +222,10 @@ def begin_unlock(backend: str) -> int:
     return _tokens.begin(_key(backend))
 
 
-def store_session_token(backend: str, token: str, generation: Optional[int] = None) -> bool:
+def store_session_token(backend: str, token: str, generation: Optional[int] = None,
+                        *, context: Optional[str] = None) -> bool:
     """Commit an unlock. Returns False (and drops the token) when a Lock happened since ``begin_unlock``."""
-    return _tokens.commit(_key(backend), token, generation, get_current_session_id())
+    return _tokens.commit(_key(backend), token, generation, get_current_session_id(), context)
 
 
 def lock(backend: Optional[str] = None) -> None:
@@ -241,9 +243,9 @@ def lock_all_profiles() -> None:
     _tokens.lock_everything()
 
 
-def is_unlocked(backend: str) -> bool:
+def is_unlocked(backend: str, *, context: Optional[str] = None) -> bool:
     """Status probe: does NOT extend the idle TTL (only real manager calls do)."""
-    return _tokens.live(_key(backend), False) is not None
+    return _tokens.live(_key(backend), False, context) is not None
 
 
 def can_prompt_here() -> bool:
