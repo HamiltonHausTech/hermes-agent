@@ -99,7 +99,7 @@ class _Token:
 
 
 class _TokenOps(NamedTuple):
-    live: Callable[[_Key, bool, Optional[str]], Optional[str]]
+    live: Callable[[_Key, bool, Optional[str], bool], Optional[str]]
     begin: Callable[[_Key], int]
     commit: Callable[[_Key, str, Optional[int], Optional[str], Optional[str]], bool]
     lock_profile: Callable[[str, Optional[str]], None]
@@ -155,7 +155,7 @@ def _token_store() -> _TokenOps:
                 del tokens[key]
             arm(now)
 
-    def live(key: _Key, touch: bool, context: Optional[str]) -> Optional[str]:
+    def live(key: _Key, touch: bool, context: Optional[str], allow_native: bool) -> Optional[str]:
         with guard:
             token = tokens.get(key)
             if token is None or (context is not None and token.context != context):
@@ -165,6 +165,8 @@ def _token_store() -> _TokenOps:
                 del tokens[key]
                 settle()
                 return None
+            if token.value == "" and not allow_native:
+                raise RuntimeError("Native password-manager access requires an interactive session")
             if touch:
                 token.last_used = now
             return token.value
@@ -212,9 +214,10 @@ def _token_store() -> _TokenOps:
 _tokens = _token_store()
 
 
-def get_session_token(backend: str, *, context: Optional[str] = None, touch: bool = True) -> Optional[str]:
+def get_session_token(backend: str, *, context: Optional[str] = None, touch: bool = True,
+                      allow_native: bool = True) -> Optional[str]:
     """Token (possibly empty for native auth), or None when locked; refreshes idle time."""
-    return _tokens.live(_key(backend), touch, context)
+    return _tokens.live(_key(backend), touch, context, allow_native)
 
 
 def begin_unlock(backend: str) -> int:
@@ -245,7 +248,7 @@ def lock_all_profiles() -> None:
 
 def is_unlocked(backend: str, *, context: Optional[str] = None) -> bool:
     """Status probe: does NOT extend the idle TTL (only real manager calls do)."""
-    return _tokens.live(_key(backend), False, context) is not None
+    return _tokens.live(_key(backend), False, context, True) is not None
 
 
 def can_prompt_here() -> bool:
